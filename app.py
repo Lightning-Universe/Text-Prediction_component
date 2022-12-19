@@ -1,19 +1,14 @@
 #! pip install -e . # change to install from github once public
-#! ltt install --pytorch-channel nightly torch --upgrade git+https://github.com/Lightning-AI/lightning git+https://github.com/Lightning-AI/lightning-gpt
+#! ltt install --pytorch-channel nightly torch --upgrade git+https://github.com/Lightning-AI/lightning git+https://github.com/Lightning-AI/lightning-minGPT
 #! curl https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt --create-dirs -o ${HOME}/data/shakespeare/input.txt -C -
 import os
 
 import lightning as L
 import mingpt.model
-from lightning_gpt.models import DeepSpeedGPT
-from lightning_gpt.data import CharDataset
+from lightning_mingpt.models import DeepSpeedGPT
+from lightning_mingpt.data import CharDataset
 import torch
 from lai_charpred import default_callbacks, DriveTensorBoardLogger, Main, gpt_10b, gpt_20b
-
-try:
-    from torchdistx.fake import fake_mode
-except ImportError:
-    from contextlib import nullcontext as fake_mode
 
 
 class MyDeepspeedGPT(DeepSpeedGPT):
@@ -47,19 +42,18 @@ class CharacterPrediction(L.LightningWork):
             val_dset, batch_size=1, num_workers=4, shuffle=False
         )
 
-        with fake_mode():
-            model = MyDeepspeedGPT(
-                vocab_size=dataset.vocab_size,
-                block_size=int(dataset.block_size),
-                model_type=None,
-                **gpt_20b,
-                learning_rate=3e-4,
-                embd_pdrop=0.1,
-                resid_pdrop=0.1,
-                attn_pdrop=0.1,
-                weight_decay=0.1,
-                betas=(0.9, 0.95),
-            )
+        model = MyDeepspeedGPT(
+            vocab_size=dataset.vocab_size,
+            block_size=int(dataset.block_size),
+            model_type=None,
+            **gpt_10b,
+            learning_rate=3e-4,
+            embd_pdrop=0.1,
+            resid_pdrop=0.1,
+            attn_pdrop=0.1,
+            weight_decay=0.1,
+            betas=(0.9, 0.95),
+        )
 
         if hasattr(torch, "compile"):
             model = torch.compile(model)
