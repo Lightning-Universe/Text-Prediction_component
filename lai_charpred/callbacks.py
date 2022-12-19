@@ -1,5 +1,5 @@
 import time
-from typing import Any
+from typing import Any, Dict, List
 
 import lightning as L
 import torch.cuda
@@ -23,14 +23,15 @@ def default_callbacks():
 
 
 class MovingAverage(torchmetrics.Metric):
-    sliding_window: list[torch.Tensor]
+    sliding_window: List[torch.Tensor]
     current_average: torch.Tensor
 
     def __init__(
         self,
         sliding_window_size: int,
+        **kwargs
     ) -> None:
-        super().__init__()
+        super().__init__(**kwargs)
 
         # need to add states here globally independent of arguments for momentum and sliding_window_size to satisfy mypy
         self.add_state("sliding_window", [], persistent=True)
@@ -55,13 +56,16 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
         super().__init__()
         self.last_batch_start_time = None
         self.gpu_utilizations10 = [
-            MovingAverage(sliding_window_size=10)
+            MovingAverage(sliding_window_size=10, sync_on_compute=False)
             for _ in range(torch.cuda.device_count())
         ]
         self.gpu_utilizations100 = [
-            MovingAverage(sliding_window_size=100)
+            MovingAverage(sliding_window_size=100, sync_on_compute=False)
             for _ in range(torch.cuda.device_count())
         ]
+
+        self.seconds_per_iter10 = MovingAverage(sliding_window_size=10, sync_on_compute=False)
+        self.seconds_per_iter100 = MovingAverage(sliding_window_size=100, sync_on_compute=False)
 
     def on_train_batch_start(
         self,
@@ -70,21 +74,27 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
         batch: Any,
         batch_idx: int,
     ) -> None:
-        if self.last_batch_start_time is None:
-            self.last_batch_start_time = time.time()
-            metrics = {}
-        else:
+        metrics = {}
+
+        if batch_idx:
             curr_time = time.time()
-            time_delta = curr_time - self.last_batch_start_time
-            metrics = {"train{separator}seconds per iter": time_delta}
+            time_delta = torch.tensor(curr_time - self.last_batch_start_time)
+            self.seconds_per_iter10.update(time_delta)
+            self.seconds_per_iter100.update(time_delta)
             self.last_batch_start_time = curr_time
+
+            metrics['train{separator}seconds_per_iter'] = time_delta
+            metrics['train{separator}seconds_per_iter_averaged10'] = self.seconds_per_iter10.compute()
+            metrics['train{separator}seconds_per_iter_averaged100'] = self.seconds_per_iter100.compute()
+        else:
+            self.last_batch_start_time = time.time()
 
         for i in range(torch.cuda.device_count()):
             metrics[
                 "gpu_stats{separator}max_memory_gpu" + str(i)
             ] = torch.cuda.max_memory_allocated(device=f"cuda:{i}")
             torch.cuda.reset_peak_memory_stats(f"cuda:{i}")
-            curr_utils = torch.cuda.utilization(f"cuda:{i}")
+            curr_utils = torch.tensor(torch.cuda.utilization(f"cuda:{i}"))
             metrics["gpu_stats{separator}utilization_gpu" + str(i)] = curr_utils
             self.gpu_utilizations10[i].update(curr_utils)
             self.gpu_utilizations100[i].update(curr_utils)
@@ -96,14 +106,15 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
                 "_update_count",
                 getattr(self.gpu_utilizations10[i], "update_count", 1),
             )
-            if batch_idx % 10 == 0 and curr_update_count > 10:
+            if curr_update_count > 10:
                 metrics[
                     "gpu_stats{separator}utilization_gpu" + str(i) + "_averaged10"
                 ] = self.gpu_utilizations10[i].compute()
-            if curr_update_count % 100 == 0 and curr_update_count > 100:
+            if curr_update_count > 100:
                 metrics[
                     "gpu_stats{separator}utilization_gpu" + str(i) + "_averaged100"
                 ] = self.gpu_utilizations100[i].compute()
+
 
         for logger in trainer.loggers:
             separator = logger.group_separator
@@ -114,3 +125,21 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
                 metrics=logger_metrics,
                 step=trainer.fit_loop.epoch_loop._batches_that_stepped,
             )
+
+    def on_save_checkpoint(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", checkpoint: Dict[str, Any]):
+        for name_str in ('gpu_utilizations10', 'gpu_utilizations100'):
+            checkpoint[name_str] = [metric.state_dict() for metric in getattr(self, name_str)]
+
+        for name_str in ('seconds_per_iter10', 'seconds_per_iter100'):
+            checkpoint[name_str] = getattr(self, name_str).state_dict()
+
+
+    def on_load_checkpoint(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", checkpoint: Dict[str, Any]):
+        for name_str in ('gpu_utilizations10', 'gpu_utilizations100'):
+            for metric, state in zip(getattr(self, name_str), checkpoint.pop(name_str, [])):
+                metric.load_state_dict(state)
+
+        for name_str in ('seconds_per_iter10', 'seconds_per_iter100'):
+            getattr(self, name_str).load_state_dict(checkpoint.pop(name_str, {}))
+
+

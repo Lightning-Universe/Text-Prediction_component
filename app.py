@@ -1,6 +1,5 @@
 #! pip install -e . # change to install from github once public
 #! ltt install --pytorch-channel nightly torch --upgrade git+https://github.com/Lightning-AI/lightning git+https://github.com/Lightning-AI/lightning-gpt
-# python -c "import sys, os; cmd = 'ltt install --pytorch-channel nightly torchdistx torch' if sys.platform == 'linux' else 'exit'; os.system(cmd)" # installs torchdistx only for linux as not available for other OS
 #! curl https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt --create-dirs -o ${HOME}/data/shakespeare/input.txt -C -
 import os
 
@@ -9,7 +8,7 @@ import mingpt.model
 from lightning_gpt.models import DeepSpeedGPT
 from lightning_gpt.data import CharDataset
 import torch
-from lai_charpred import default_callbacks, DriveTensorBoardLogger, Main, gpt_10b
+from lai_charpred import default_callbacks, DriveTensorBoardLogger, Main, gpt_10b, gpt_20b
 
 try:
     from torchdistx.fake import fake_mode
@@ -53,7 +52,7 @@ class CharacterPrediction(L.LightningWork):
                 vocab_size=dataset.vocab_size,
                 block_size=int(dataset.block_size),
                 model_type=None,
-                **gpt_10b,
+                **gpt_20b,
                 learning_rate=3e-4,
                 embd_pdrop=0.1,
                 resid_pdrop=0.1,
@@ -62,8 +61,8 @@ class CharacterPrediction(L.LightningWork):
                 betas=(0.9, 0.95),
             )
 
-        # if hasattr(torch, "compile"):
-        #     model = torch.compile(model)
+        if hasattr(torch, "compile"):
+            model = torch.compile(model)
 
         trainer = L.Trainer(
             precision=16,
