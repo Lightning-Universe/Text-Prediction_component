@@ -4,14 +4,18 @@
 
 
 import lightning as L
-import os, torch
+import os, torch, deepspeed
 from lightning_mingpt import models, data
 from lit_llms.tensorboard import DriveTensorBoardLogger, MultiNodeLightningTrainerWithTensorboard
 
-from lai_charpred import default_callbacks, gpt_10b, gpt_20b
+from lai_charpred import default_callbacks, gpt_10b, gpt_20b, gpt_45b
 
 
 class MyDeepspeedGPT(models.DeepSpeedGPT):
+    # def __init__(self, *args, activation_checkpointing: bool = False, **kwargs):
+    #     super().__init__(*args, **kwargs)
+    #     if activation_checkpointing:
+    #         self.forward = deepspeed.checkpointing.checkpoint(self.forward)
     def configure_optimizers(self):
         return self.mingpt.configure_optimizers(self.mingpt_trainer_config)
 
@@ -51,10 +55,18 @@ class CharacterPrediction(L.LightningWork):
         if hasattr(torch, "compile"):
             model = torch.compile(model)
 
+        # strategy = L.pytorch.strategies.DeepSpeedStrategy(stage=3,
+        #     offload_optimizer=True,
+        #     offload_parameters=True,
+        #     partition_activations=True,
+        #     cpu_checkpointing= False
+        # )
+
         trainer = L.Trainer(
             precision=16,
             # strategy='ddp',
             strategy="deepspeed_stage_3_offload",
+            # strategy=strategy,
             callbacks=default_callbacks(),
             logger=DriveTensorBoardLogger(save_dir=".", drive=self.tensorboard_drive),
             log_every_n_steps=5,
@@ -65,7 +77,7 @@ class CharacterPrediction(L.LightningWork):
 app = L.LightningApp(
     MultiNodeLightningTrainerWithTensorboard(
         CharacterPrediction,
-        num_nodes=2,
+        num_nodes=3,
         cloud_compute=L.CloudCompute("gpu-fast-multi"),
     )
 )
