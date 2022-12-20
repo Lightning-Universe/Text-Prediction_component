@@ -8,7 +8,7 @@ import os, torch
 from lightning_mingpt import models
 from lit_llms.tensorboard import DriveTensorBoardLogger, MultiNodeLightningTrainerWithTensorboard
 
-from lai_textpred import default_callbacks, gpt_10b, WordDataset
+from lai_textpred import default_callbacks, gpt_20b, WordDataset
 
 
 class WordPrediction(L.LightningWork):
@@ -34,7 +34,7 @@ class WordPrediction(L.LightningWork):
         # --------------------
         model = models.FSDPGPT(
             vocab_size=train_dataset.vocab_size, block_size=int(train_dataset.block_size),
-            model_type=None, **gpt_10b,
+            model_type=None, **gpt_20b,
         )
 
 
