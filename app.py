@@ -38,9 +38,9 @@ class WordPrediction(L.LightningWork):
         )
 
 
-        # -------------------
-        # RUN YOUR FINETUNING
-        # -------------------
+        # -----------------
+        # RUN YOUR TRAINING
+        # -----------------
         trainer = L.Trainer(
             max_epochs=2, limit_train_batches=250,
             precision=16, strategy="deepspeed_stage_3_offload",
