@@ -4,4 +4,4 @@ To run, you currently need follow these steps (since the repository is still pri
 
 - `git clone git@github.com:Lightning-AI/LAI-Character-Prediction-Component`
 - `cd LAI-Character-Prediction-Component`
-- `lightning run app app.py`
+- `lightning run app app.py --cloud`

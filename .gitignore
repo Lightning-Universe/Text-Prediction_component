@@ -141,3 +141,4 @@ lightning_logs
 dataset
 
 linux.txt
+tensorboard_logs
