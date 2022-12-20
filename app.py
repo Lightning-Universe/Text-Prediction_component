@@ -1,24 +1,17 @@
 #! pip install -e . # change to install from github once public
-#! ltt install --pytorch-channel nightly torch --upgrade git+https://github.com/Lightning-AI/lightning git+https://github.com/Lightning-AI/lightning-minGPT
+#! ltt install --pytorch-channel nightly torch --upgrade git+https://github.com/Lightning-AI/lightning git+https://github.com/Lightning-AI/lightning-minGPT git+https://github.com/Lightning-AI/lightning-LLMs
 #! curl https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt --create-dirs -o ${HOME}/data/shakespeare/input.txt -C -
-import os
+
 
 import lightning as L
-import mingpt.model
-from lightning_mingpt.models import DeepSpeedGPT
-from lightning_mingpt.data import CharDataset
-import torch
-from lai_charpred import default_callbacks, DriveTensorBoardLogger, Main, gpt_10b, gpt_20b
+import os, torch
+from lightning_mingpt import models, data
+from lit_llms.tensorboard import DriveTensorBoardLogger, MultiNodeLightningTrainerWithTensorboard
+
+from lai_charpred import default_callbacks, gpt_10b, gpt_20b
 
 
-class MyDeepspeedGPT(DeepSpeedGPT):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.mingpt = None
-
-    def configure_sharded_model(self) -> None:
-        self.mingpt = mingpt.model.GPT(self.mingpt_config)
-
+class MyDeepspeedGPT(models.DeepSpeedGPT):
     def configure_optimizers(self):
         return self.mingpt.configure_optimizers(self.mingpt_trainer_config)
 
@@ -31,7 +24,7 @@ class CharacterPrediction(L.LightningWork):
     def run(self):
         with open(os.path.expanduser("~/data/shakespeare/input.txt")) as f:
             text = f.read()
-        dataset = CharDataset(text, 50)
+        dataset = data.CharDataset(text, 50)
         train_dset, val_dset = torch.utils.data.random_split(
             dataset, [0.7, 0.3], generator=torch.Generator().manual_seed(42)
         )
@@ -46,7 +39,7 @@ class CharacterPrediction(L.LightningWork):
             vocab_size=dataset.vocab_size,
             block_size=int(dataset.block_size),
             model_type=None,
-            **gpt_10b,
+            **gpt_20b,
             learning_rate=3e-4,
             embd_pdrop=0.1,
             resid_pdrop=0.1,
@@ -70,7 +63,7 @@ class CharacterPrediction(L.LightningWork):
 
 
 app = L.LightningApp(
-    Main(
+    MultiNodeLightningTrainerWithTensorboard(
         CharacterPrediction,
         num_nodes=2,
         cloud_compute=L.CloudCompute("gpu-fast-multi"),
