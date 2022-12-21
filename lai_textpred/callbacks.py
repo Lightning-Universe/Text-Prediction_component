@@ -7,7 +7,7 @@ import torchmetrics
 from lightning import pytorch as pl
 
 
-def default_callbacks():
+def default_callbacks(worldsize: int):
     early_stopping = L.pytorch.callbacks.EarlyStopping(
         monitor="train_loss",
         min_delta=0.00,
@@ -19,7 +19,7 @@ def default_callbacks():
         monitor="train_loss",
         mode="min",
     )
-    return [early_stopping, checkpoints, CustomMonitoringCallback()]
+    return [early_stopping, checkpoints, CustomMonitoringCallback(worldsize=worldsize)]
 
 
 class MovingAverage(torchmetrics.Metric):

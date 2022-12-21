@@ -37,14 +37,13 @@ class WordPrediction(L.LightningWork):
             model_type=None, **gpt_20b,
         )
 
-
         # -----------------
         # RUN YOUR TRAINING
         # -----------------
         trainer = L.Trainer(
             max_epochs=2, limit_train_batches=250,
             precision=16, strategy="deepspeed_stage_3_offload",
-            callbacks=default_callbacks(), log_every_n_steps=5,
+            callbacks=default_callbacks(int(os.environ['WORLD_SIZE'])), log_every_n_steps=5,
             logger=DriveTensorBoardLogger(save_dir=".", drive=self.tensorboard_drive),
         )
         trainer.fit(model, train_loader)
