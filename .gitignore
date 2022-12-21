@@ -140,4 +140,4 @@ lightning_logs
 .idea
 dataset
 
-linux.txt
+tensorboard_logs
