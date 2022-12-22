@@ -9,7 +9,7 @@ from lightning import pytorch as pl
 
 def default_callbacks(worldsize: int):
     early_stopping = L.pytorch.callbacks.EarlyStopping(
-        monitor="val_loss",
+        monitor="train_loss",
         min_delta=0.00,
         verbose=True,
         mode="min",
