@@ -1,5 +1,5 @@
 #! pip install -e . # change to install from github once public
-#! ltt install --pytorch-channel nightly torch --upgrade git+https://github.com/Lightning-AI/lightning git+https://github.com/Lightning-AI/lightning-minGPT git+https://github.com/Lightning-AI/lightning-LLMs
+#! ltt install --upgrade git+https://github.com/Lightning-AI/lightning git+https://github.com/Lightning-AI/lightning-minGPT git+https://github.com/Lightning-AI/lightning-LLMs
 #! curl https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt --create-dirs -o ${HOME}/data/shakespeare/input.txt -C -
 
 
@@ -17,15 +17,17 @@ class WordPrediction(L.LightningWork):
         self.tensorboard_drive = tb_drive
 
     def run(self):
+        error_if_local()
+
         # -------------------
         # CONFIGURE YOUR DATA
         # -------------------
         with open(os.path.expanduser("~/data/shakespeare/input.txt")) as f:
             text = f.read()
         train_dataset = WordDataset(text, 5)
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=1, num_workers=4, shuffle=True
-        )
+        with open(os.path.expanduser("~/data/shakespeare/input.txt")) as f:
+            text = f.read()
+        train_dataset = data.CharDataset(text, 50)
 
         # --------------------
         # CONFIGURE YOUR MODEL
@@ -34,10 +36,6 @@ class WordPrediction(L.LightningWork):
             vocab_size=train_dataset.vocab_size, block_size=int(train_dataset.block_size),
             model_type=None, **gpt_20b,
         )
-
-        # feature of PyTorch 2.0 for speedup
-        if hasattr(torch, "compile"):
-            model = torch.compile(model)
 
         # -----------------
         # RUN YOUR TRAINING
