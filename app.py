@@ -1,5 +1,5 @@
 #! pip install -e . # change to install from github once public
-#! ltt install --pytorch-channel nightly torch --upgrade git+https://github.com/Lightning-AI/lightning git+https://github.com/Lightning-AI/lightning-minGPT git+https://github.com/Lightning-AI/lightning-LLMs
+#! ltt install --upgrade git+https://github.com/Lightning-AI/lightning git+https://github.com/Lightning-AI/lightning-minGPT git+https://github.com/Lightning-AI/lightning-LLMs
 #! curl https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt --create-dirs -o ${HOME}/data/shakespeare/input.txt -C -
 
 
