@@ -7,7 +7,7 @@ import torchmetrics
 from lightning import pytorch as pl
 
 
-def default_callbacks(worldsize: int):
+def default_callbacks():
     early_stopping = L.pytorch.callbacks.EarlyStopping(
         monitor="train_loss",
         min_delta=0.00,
@@ -19,7 +19,7 @@ def default_callbacks(worldsize: int):
         monitor="train_loss",
         mode="min",
     )
-    return [early_stopping, checkpoints, CustomMonitoringCallback(worldsize=worldsize)]
+    return [early_stopping, checkpoints, CustomMonitoringCallback()]
 
 
 class MovingAverage(torchmetrics.Metric):
@@ -48,18 +48,11 @@ class MovingAverage(torchmetrics.Metric):
 
 
 class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
-    def __init__(self, worldsize: int = 1):
+    def __init__(self):
         super().__init__()
-        self.worldsize = worldsize
         self.last_batch_start_time = None
-        self.gpu_utilizations10 = [
-            MovingAverage(sliding_window_size=10, sync_on_compute=False)
-            for _ in range(worldsize)
-        ]
-        self.gpu_utilizations100 = [
-            MovingAverage(sliding_window_size=100, sync_on_compute=False)
-            for _ in range(worldsize)
-        ]
+        self.gpu_utilizations10 = []
+        self.gpu_utilizations100 = []
 
         self.seconds_per_iter10 = MovingAverage(
             sliding_window_size=10, sync_on_compute=False
@@ -68,6 +61,14 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
             sliding_window_size=100, sync_on_compute=False
         )
 
+    def _init_gpu_util_trackers(self, world_size: int):
+        if not self.gpu_utilizations10:
+            for _ in range(world_size):
+                self.gpu_utilizations10.append(MovingAverage(sliding_window_size=10, sync_on_compute=False))
+        if not self.gpu_utilizations100:
+            for _ in range(world_size):
+                self.gpu_utilizations100.append(MovingAverage(sliding_window_size=100, sync_on_compute=False))
+
     def on_train_batch_start(
         self,
         trainer: "pl.Trainer",
@@ -75,8 +76,11 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
         batch: Any,
         batch_idx: int,
     ) -> None:
+        self._init_gpu_util_trackers(trainer.world_size)
+
         metrics = {}
 
+        # only calc time after first batch
         if batch_idx:
             curr_time = time.time()
             time_delta = curr_time - self.last_batch_start_time
@@ -95,26 +99,29 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
         else:
             self.last_batch_start_time = time.time()
 
-        for i in range(self.worldsize):
+        # collect the metrics on the current rank
+        device = trainer.strategy.root_device
+        curr_utils = torch.tensor(torch.cuda.utilization(), device=device)
+        max_memory = torch.tensor(torch.cuda.max_memory_allocated(), device=device)
+        torch.cuda.reset_max_memory_allocated()
 
-            if i == trainer.global_rank:
-                curr_utils = torch.cuda.utilization(trainer.strategy.root_device)
-                max_memory = torch.cuda.max_memory_allocated(trainer.strategy.root_device)
-                torch.cuda.reset_max_memory_allocated(trainer.strategy.root_device)
+        # gather the metrics from all processes
+        curr_utils_total_rank = trainer.strategy.all_gather(curr_utils)
+        max_memory_total_rank = trainer.strategy.all_gather(max_memory)
 
-            else:
-                curr_utils = 0
-                max_memory = 0
+        # the metrics are in an N x 1 tensor where N is the total number of processes
+        assert curr_utils_total_rank.size(0) == trainer.world_size
 
-            curr_utils_total_rank = torch.tensor(trainer.strategy.reduce(curr_utils, reduce_op='sum'))
-            max_memory_total_rank = torch.tensor(trainer.strategy.reduce(max_memory, reduce_op='sum'))
-
+        # bookkeeping and compute statistics for each rank
+        for i in range(trainer.world_size):
             metrics[
                 "gpu_stats{separator}max_memory_rank" + str(i)
-            ] = max_memory_total_rank
-            metrics["gpu_stats{separator}utilization_rank" + str(i)] = curr_utils_total_rank
-            self.gpu_utilizations10[i].update(curr_utils_total_rank)
-            self.gpu_utilizations100[i].update(curr_utils_total_rank)
+            ] = max_memory_total_rank[i]
+            metrics[
+                "gpu_stats{separator}utilization_rank" + str(i)
+            ] = curr_utils_total_rank[i]
+            self.gpu_utilizations10[i].update(curr_utils_total_rank[i])
+            self.gpu_utilizations100[i].update(curr_utils_total_rank[i])
 
             # update counts have to be the same for 10 and 100 metrics
             # check for protected and public because of https://github.com/Lightning-AI/metrics/pull/1370
@@ -132,6 +139,7 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
                     "gpu_stats{separator}utilization_rank" + str(i) + "_averaged100"
                 ] = self.gpu_utilizations100[i].compute()
 
+        # send metrics to the logger (only rank 0 will log, but the metrics for every rank)
         for logger in trainer.loggers:
             separator = logger.group_separator
             logger_metrics = {

@@ -8,7 +8,7 @@ import os, torch
 from lightning_mingpt import models
 from lit_llms.tensorboard import DriveTensorBoardLogger, MultiNodeLightningTrainerWithTensorboard
 
-from lai_textpred import default_callbacks, gpt_20b, WordDataset
+from lai_textpred import default_callbacks, gpt_20b, WordDataset, error_if_local
 
 
 class WordPrediction(L.LightningWork):
@@ -25,9 +25,9 @@ class WordPrediction(L.LightningWork):
         with open(os.path.expanduser("~/data/shakespeare/input.txt")) as f:
             text = f.read()
         train_dataset = WordDataset(text, 5)
-        with open(os.path.expanduser("~/data/shakespeare/input.txt")) as f:
-            text = f.read()
-        train_dataset = data.CharDataset(text, 50)
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=1, num_workers=4, shuffle=True
+        )
 
         # --------------------
         # CONFIGURE YOUR MODEL
@@ -43,7 +43,7 @@ class WordPrediction(L.LightningWork):
         trainer = L.Trainer(
             max_epochs=2, limit_train_batches=250,
             precision=16, strategy="deepspeed_stage_3_offload",
-            callbacks=default_callbacks(int(os.environ['WORLD_SIZE'])), log_every_n_steps=5,
+            callbacks=default_callbacks(), log_every_n_steps=5,
             logger=DriveTensorBoardLogger(save_dir=".", drive=self.tensorboard_drive),
         )
         trainer.fit(model, train_loader)
