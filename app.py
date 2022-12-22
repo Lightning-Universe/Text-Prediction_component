@@ -8,7 +8,7 @@ import os, torch
 from lightning_mingpt import models
 from lit_llms.tensorboard import DriveTensorBoardLogger, MultiNodeLightningTrainerWithTensorboard
 
-from lai_textpred import default_callbacks, gpt_20b, WordDataset
+from lai_textpred import default_callbacks, gpt_20b, WordDataset, error_if_local
 
 
 class WordPrediction(L.LightningWork):
