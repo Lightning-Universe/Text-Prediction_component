@@ -48,18 +48,11 @@ class MovingAverage(torchmetrics.Metric):
 
 
 class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
-    def __init__(self, worldsize: int = 1):
+    def __init__(self):
         super().__init__()
-        self.worldsize = worldsize
         self.last_batch_start_time = None
-        self.gpu_utilizations10 = [
-            MovingAverage(sliding_window_size=10, sync_on_compute=False)
-            for _ in range(worldsize)
-        ]
-        self.gpu_utilizations100 = [
-            MovingAverage(sliding_window_size=100, sync_on_compute=False)
-            for _ in range(worldsize)
-        ]
+        self.gpu_utilizations10 = []
+        self.gpu_utilizations100 = []
 
         self.seconds_per_iter10 = MovingAverage(
             sliding_window_size=10, sync_on_compute=False
@@ -68,6 +61,14 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
             sliding_window_size=100, sync_on_compute=False
         )
 
+    def _init_gpu_util_trackers(self, world_size: int):
+        if not self.gpu_utilizations10:
+            for _ in range(world_size):
+                self.gpu_utilizations10.append(MovingAverage(sliding_window_size=10, sync_on_compute=False))
+        if not self.gpu_utilizations100:
+            for _ in range(world_size):
+                self.gpu_utilizations100.append(MovingAverage(sliding_window_size=100, sync_on_compute=False))
+
     def on_train_batch_start(
         self,
         trainer: "pl.Trainer",
@@ -75,8 +76,11 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
         batch: Any,
         batch_idx: int,
     ) -> None:
+        self._init_gpu_util_trackers(trainer.world_size)
+
         metrics = {}
 
+        # only calc time after first batch
         if batch_idx:
             curr_time = time.time()
             time_delta = curr_time - self.last_batch_start_time
@@ -106,10 +110,10 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
         max_memory_total_rank = trainer.strategy.all_gather(max_memory)
 
         # the metrics are in an N x 1 tensor where N is the total number of processes
-        assert curr_utils_total_rank.size(0) == self.worldsize
+        assert curr_utils_total_rank.size(0) == trainer.world_size
 
         # bookkeeping and compute statistics for each rank
-        for i in range(self.worldsize):
+        for i in range(trainer.world_size):
             metrics[
                 "gpu_stats{separator}max_memory_rank" + str(i)
             ] = max_memory_total_rank[i]
