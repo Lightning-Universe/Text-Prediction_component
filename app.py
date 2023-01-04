@@ -1,5 +1,5 @@
-#! pip install -e . # change to install from github once public
-#! ltt install --upgrade git+https://github.com/Lightning-AI/lightning git+https://github.com/Lightning-AI/lightning-minGPT git+https://github.com/Lightning-AI/lightning-LLMs
+#! pip install -e . light-the-torch # change to install from github once public
+#! ltt install --upgrade git+https://github.com/Lightning-AI/lightning git+https://github.com/Lightning-AI/lightning-minGPT.git git+https://github.com/Lightning-AI/lightning-LLMs
 #! curl https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt --create-dirs -o ${HOME}/data/shakespeare/input.txt -C -
 
 
@@ -9,6 +9,12 @@ from lightning_mingpt import models
 from lit_llms.tensorboard import DriveTensorBoardLogger, MultiNodeLightningTrainerWithTensorboard
 
 from lai_textpred import default_callbacks, gpt_20b, WordDataset, error_if_local
+
+class MyGPT(models.DeepSpeedGPT):
+
+    # disable fused adam
+    def configure_optimizers(self):
+        return self.mingpt.configure_optimizers(self.mingpt_trainer_config)
 
 
 class WordPrediction(L.LightningWork):
@@ -32,7 +38,7 @@ class WordPrediction(L.LightningWork):
         # --------------------
         # CONFIGURE YOUR MODEL
         # --------------------
-        model = models.FSDPGPT(
+        model = MyGPT(
             vocab_size=train_dataset.vocab_size, block_size=int(train_dataset.block_size),
             model_type=None, **gpt_20b,
         )
