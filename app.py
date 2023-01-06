@@ -10,6 +10,12 @@ from lit_llms.tensorboard import DriveTensorBoardLogger, MultiNodeLightningTrain
 
 from lai_textpred import default_callbacks, gpt_20b, WordDataset, error_if_local
 
+class MyGPT(models.DeepSpeedGPT):
+
+    # disable fused adam
+    def configure_optimizers(self):
+        return self.mingpt.configure_optimizers(self.mingpt_trainer_config)
+
 
 class WordPrediction(L.LightningWork):
     def __init__(self, *args, tb_drive, **kwargs):
