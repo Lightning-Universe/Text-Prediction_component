@@ -35,6 +35,13 @@ You can do this:
 
 All handled easily with the [Lightning Apps framework](https://lightning.ai/lightning-docs/).
 
+### Prediction Example
+A typical example of text prediction could look like this:
+
+_Prompt:_ `Please be aware of the`
+
+_Prediction_: `situation`
+
 ## Run
 
 To run paste the following code snippet in a file `app.py`:
