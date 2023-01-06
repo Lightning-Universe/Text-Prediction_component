@@ -1,5 +1,6 @@
 <div align="center">
     <h1>
+        <img src="https://lightningaidev.wpengine.com/wp-content/uploads/2023/01/Group-15.png">
         <br>
         Train Large Text Prediction Models with Lightning
         </br>
@@ -39,8 +40,8 @@ All handled easily with the [Lightning Apps framework](https://lightning.ai/ligh
 To run paste the following code snippet in a file `app.py`:
 
 ```python
-#! pip install -e . light-the-torch # TODO: change to install from github once public
-#! ltt install --upgrade git+https://github.com/Lightning-AI/lightning-LLMs torch
+#! pip install light-the-torch
+#! ltt install --upgrade git+https://github.com/Lightning-AI/lightning-LLMs git+https://github.com/Lightning-AI/LAI-Text-Prediction-Component
 #! curl https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt --create-dirs -o ${HOME}/data/shakespeare/input.txt -C -
 
 

@@ -1,5 +1,5 @@
-#! pip install -e . light-the-torch # change to install from github once public
-#! ltt install --upgrade git+https://github.com/Lightning-AI/lightning-LLMs torch
+#! pip install light-the-torch
+#! ltt install --upgrade git+https://github.com/Lightning-AI/lightning-LLMs git+https://github.com/Lightning-AI/LAI-Text-Prediction-Component
 #! curl https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt --create-dirs -o ${HOME}/data/shakespeare/input.txt -C -
 
 
