@@ -3,7 +3,7 @@ import string
 from collections import Counter
 
 from lightning.pytorch.utilities.rank_zero import rank_zero_info
-from lightning_mingpt.data import CharDataset
+from lightning_gpt.data import CharDataset
 
 
 class WordDataset(CharDataset):
