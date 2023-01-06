@@ -101,8 +101,8 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
 
         # collect the metrics on the current rank
         device = trainer.strategy.root_device
-        curr_utils = torch.tensor(torch.cuda.utilization(), device=device)
-        max_memory = torch.tensor(torch.cuda.max_memory_allocated(), device=device)
+        curr_utils = torch.tensor(torch.cuda.utilization(), device=device, dtype=torch.float32)
+        max_memory = torch.tensor(torch.cuda.max_memory_allocated(), device=device, dtype=torch.float32)
         torch.cuda.reset_max_memory_allocated()
 
         # gather the metrics from all processes
