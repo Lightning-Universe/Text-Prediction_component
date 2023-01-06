@@ -102,12 +102,12 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
             self.seconds_per_iter100.update(avg_time_delta)
             self.last_batch_start_time = curr_time
 
-            metrics["train{separator}seconds_per_iter"] = avg_time_delta
+            metrics["train/seconds_per_iter"] = avg_time_delta
             metrics[
-                "train{separator}seconds_per_iter_averaged10"
+                "train/seconds_per_iter_averaged10"
             ] = self.seconds_per_iter10.compute()
             metrics[
-                "train{separator}seconds_per_iter_averaged100"
+                "train/seconds_per_iter_averaged100"
             ] = self.seconds_per_iter100.compute()
 
         # collect the metrics on the current rank
@@ -130,10 +130,10 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
         # bookkeeping and compute statistics for each rank
         for i in range(trainer.world_size):
             metrics[
-                "gpu_stats{separator}max_memory_rank" + str(i)
+                f"gpu_stats/max_memory_rank{i}"
             ] = max_memory_total_rank[i]
             metrics[
-                "gpu_stats{separator}utilization_rank" + str(i)
+                f"gpu_stats/utilization_rank{i}"
             ] = curr_utils_total_rank[i]
             self.gpu_utilizations10[i].update(curr_utils_total_rank[i])
             self.gpu_utilizations100[i].update(curr_utils_total_rank[i])
@@ -147,23 +147,14 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
             )
             if curr_update_count > 10:
                 metrics[
-                    "gpu_stats{separator}utilization_rank" + str(i) + "_averaged10"
+                    f"gpu_stats/utilization_rank{i}_averaged10"
                 ] = self.gpu_utilizations10[i].compute()
             if curr_update_count > 100:
                 metrics[
-                    "gpu_stats{separator}utilization_rank" + str(i) + "_averaged100"
+                    f"gpu_stats/utilization_rank{i}_averaged100"
                 ] = self.gpu_utilizations100[i].compute()
 
-        # send metrics to the logger (only rank 0 will log, but the metrics for every rank)
-        for logger in trainer.loggers:
-            separator = logger.group_separator
-            logger_metrics = {
-                k.format(separator=separator): v for k, v in metrics.items()
-            }
-            logger.log_metrics(
-                metrics=logger_metrics,
-                step=trainer.fit_loop.epoch_loop._batches_that_stepped,
-            )
+        pl_module.log_dict(metrics, sync_dist=False, on_step=True, on_epoch=False, rank_zero_only=True)
 
         trainer.strategy.barrier()
         self.last_batch_start_time = time.time()
