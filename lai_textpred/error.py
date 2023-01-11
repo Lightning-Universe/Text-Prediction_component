@@ -1,4 +1,3 @@
-import warnings
 from lightning.app.utilities.cloud import is_running_in_cloud
 
 
