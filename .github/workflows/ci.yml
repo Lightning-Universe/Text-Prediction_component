@@ -1,4 +1,4 @@
-name: Test Text Classification
+name: Test Text Prediction
 
 # see: https://help.github.com/en/actions/reference/events-that-trigger-workflows
 on:
