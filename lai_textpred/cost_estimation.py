@@ -8,16 +8,16 @@ import lightning.pytorch.callbacks.callback
 import torch
 
 cost_per_cloudcompute_hour = {
-    "default": 0.022,
-    "cpu-small": 0.052,
-    "cpu-medium": 0.209,
-    "flow-lite": 0.01,
-    "gpu": 0.132,
-    "gpu-rtx": 0.202,
-    "gpu-rtx-multi": 0.945,
-    "gpu-fast": 0.383,
-    "gpu-fast-multi": 1.530,
-    "gpu-multi": 0.289,
+    "default": 0.1,
+    "cpu-small": 0.2,
+    "cpu-medium": 0.3,
+    "flow-lite": 0.1,
+    "gpu": 0.5,
+    "gpu-rtx": 0.75,
+    "gpu-rtx-multi": 3.0,
+    "gpu-fast": 0.75,
+    "gpu-fast-multi": 3.0,
+    "gpu-multi": 2.0,
 }
 
 
