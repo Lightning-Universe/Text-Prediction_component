@@ -1,9 +1,11 @@
 import math
+import warnings
 from collections import defaultdict, deque
 from functools import partial
 from typing import Any, Optional
 
 import lightning.pytorch.callbacks.callback
+import torch
 
 cost_per_cloudcompute_hour = {
     "default": 0.022,
@@ -18,69 +20,106 @@ cost_per_cloudcompute_hour = {
     "gpu-multi": 0.289,
 }
 
-procs_per_cloudcompute = {
-    "default": 1,
-    "cpu-small": 1,
-    "cpu-medium": 1,
-    "flow-lite": 1,
-    "gpu": 1,
-    "gpu-rtx": 1,
-    "gpu-rtx-multi": 4,
-    "gpu-fast": 1,
-    "gpu-fast-multi": 4,
-    "gpu-multi": 2,
-}
 
 def is_steady_state(*metrics, rtol: float = 0.015, atol: Optional[float] = None):
-    mean_metric = sum(metrics)/len(metrics)
+    mean_metric = sum(metrics) / len(metrics)
     min_metric = min(metrics)
     max_metric = max(metrics)
-    return _check_tols(max_metric, mean_metric, rtol, atol) and _check_tols(mean_metric, min_metric, rtol, atol)
+    return _check_tols(max_metric, mean_metric, rtol, atol) and _check_tols(
+        mean_metric, min_metric, rtol, atol
+    )
 
 
 def _check_atol(val_a, val_b, atol: Optional[float]):
     return (atol is None) or (abs(val_a - val_b) <= atol)
 
+
 def _check_rtol(val_a, val_b, rtol: float):
     return abs(val_a - val_b) <= (rtol * val_b)
+
 
 def _check_tols(val_a, val_b, rtol: float, atol: float):
     return _check_atol(val_a, val_b, atol) and _check_rtol(val_a, val_b, rtol)
 
+
 def chinchilla_metric_samples(final_loss, num_params):
-    return ((1.69 + 406.4/num_params**0.34)/final_loss)**(1/0.27)
+    # D = \frac{410N^{0.34}}{N^{0.34}L-1.69N^{0.34}-406.4}^{\frac{1}{0.27}}
+    return ((410*num_params**0.34)/(final_loss*num_params**0.34-1.69*num_params**0.34-406.4))**(1/0.27)
 
 
-def calc_compute_cost_from_num_samples(num_samples, cloud_compute, num_cloud_compute, num_procs, batch_size, time_per_batch):
-    effective_bs = num_procs * batch_size
-    num_batches = math.ceil(num_samples / effective_bs)
-    time_per_batch_hours = time_per_batch / 60 / 60 # convert from seconds to hours
-    total_time = num_batches * time_per_batch_hours
-    cost_per_cloud_compute = cost_per_cloudcompute_hour[cloud_compute] * total_time
+def calc_total_time_per_node(num_samples, num_procs, batch_size, time_per_batch):
+    num_samples_per_proc = num_samples / num_procs
+    num_batches = num_samples_per_proc / batch_size
+    return time_per_batch * num_batches / 60 / 60  # time from secs to hours
+
+
+def calc_compute_cost_from_num_samples(
+    num_samples, cloud_compute, num_cloud_compute, num_procs, batch_size, time_per_batch
+):
+    time_per_node = calc_total_time_per_node(
+        num_samples, num_procs, batch_size, time_per_batch
+    )
+    cost_per_cloud_compute = cost_per_cloudcompute_hour[cloud_compute] * (
+        time_per_node)
     return cost_per_cloud_compute * num_cloud_compute
 
+
 class CostEstimationCallback(lightning.pytorch.callbacks.model_summary.ModelSummary):
-    def __init__(self, target_loss: float, cloud_compute: str, num_nodes: int, batch_size: int = 1, num_params: Optional[int] = None):
+    def __init__(
+        self,
+        target_loss: float,
+        cloud_compute: str,
+        batch_size: int = 1,
+        num_params: Optional[int] = None,
+        rtol: float = 0.015,
+        atol: Optional[float] = None,
+        steady_state_det_mode: str = "iter_speed",
+        average: Optional[float] = None,
+        moving_average_window: int = 10,
+    ):
         # TODO: Add rtol and atol with sensible defaults
         super().__init__()
 
         self.target_loss = target_loss
         self.cloud_compute = cloud_compute
-        self.num_nodes = num_nodes
         self.batch_size = batch_size
         self.num_params: Optional[int] = num_params
         self.steady_state_achieved = False
+        self.rtol = rtol
+        self.atol = atol
 
-        self.gpu_metrics = defaultdict(partial(deque, maxlen=10))
+        self.gpu_metrics = defaultdict(partial(deque, maxlen=moving_average_window))
+        self.iteration_speeds = deque(maxlen=moving_average_window)
+        self.average = average
+        self.steady_state_det_mode = steady_state_det_mode
+
+        if steady_state_det_mode == "utilization":
+            warnings.warn('Cuda utilization as a proxy metric for steady state may not be optimal. '
+                          'The actual parameters can differ a lot depending on the cluster configuration and backend '
+                          'parameters. Please consider using `iter_speed` as the steady state detection mode!'
+                          )
+            self._steady_state_func = self._is_steady_state_utilization
+        elif steady_state_det_mode == "iter_speed":
+            self._steady_state_func = self._is_steady_state_iteration_speed
+        else:
+            raise ValueError(
+                f"steady_state_det_mode must be either 'utilization' or 'iter_speed', not {steady_state_det_mode}"
+            )
 
     @property
     def num_samples_required(self) -> int:
         if self.num_params is None:
-            raise ValueError('Cannot calculate the number of samples without the number of model parameters!')
+            raise ValueError(
+                "Cannot calculate the number of samples without the number of model parameters!"
+            )
 
         return chinchilla_metric_samples(self.target_loss, self.num_params)
 
-    def on_fit_start(self, trainer: lightning.pytorch.Trainer, pl_module: lightning.pytorch.LightningModule) -> None:
+    def on_fit_start(
+        self,
+        trainer: lightning.pytorch.Trainer,
+        pl_module: lightning.pytorch.LightningModule,
+    ) -> None:
         if self.num_params is None:
             model_summary = self._summary(trainer, pl_module)
             self.num_params = model_summary.trainable_parameters
@@ -95,16 +134,72 @@ class CostEstimationCallback(lightning.pytorch.callbacks.model_summary.ModelSumm
 
         metrics = trainer.callback_metrics
 
-        if not self.steady_state_achieved:
+        if trainer.is_global_zero and not self.steady_state_achieved:
             for i in range(trainer.world_size):
-                if f"gpu_stats/utilization_rank{i}_averaged10" in metrics:
-                    self.gpu_metrics[i].append(metrics[f"gpu_stats/utilization_rank{i}_averaged10"])
+                metric_name_cuda = (
+                    f"gpu_stats/utilization_rank{i}"
+                    + self._average_postfix(self.average)
+                )
 
-            all_steady_state = trainer.strategy.reduce(is_steady_state(*self.gpu_metrics[i], rtol=self.rtol, atol=self.atol), reduce_op='sum') == trainer.world_size
-            self.steady_state_achieved = all_steady_state
+                if metric_name_cuda in trainer.callback_metrics:
+                    self.gpu_metrics[i].append(
+                        trainer.callback_metrics[metric_name_cuda]
+                    )
+
+            metric_name_speed = "train/seconds_per_iter" + self._average_postfix(
+                self.average
+            )
+            if metric_name_speed in trainer.callback_metrics:
+                self.iteration_speeds.append(
+                    trainer.callback_metrics[metric_name_speed]
+                )
+
+            self.steady_state_achieved = self._steady_state_func()
 
         if self.steady_state_achieved:
-            cost = calc_compute_cost_from_num_samples(self.num_samples_required, self.cloud_compute, trainer.num_nodes, trainer.world_size, self.batch_size, metrics["train/seconds_per_iter_averaged10"])
-            pl_module.log('estimated_cost_in_dollars', cost, sync_dist=False, rank_zero_only=True)
+            cost = calc_compute_cost_from_num_samples(
+                self.num_samples_required,
+                self.cloud_compute,
+                trainer.num_nodes,
+                trainer.world_size,
+                self.batch_size,
+                metrics["train/seconds_per_iter_averaged10"],
+            )
+            tpn = calc_total_time_per_node(
+                self.num_samples_required,
+                trainer.world_size,
+                self.batch_size,
+                metrics["train/seconds_per_iter_averaged10"],
+            )
+            pl_module.log(
+                "estimated_cost_in_dollars", cost, sync_dist=False, rank_zero_only=True
+            )
+            pl_module.log(
+                "estimated_total_time", tpn, sync_dist=False, rank_zero_only=True
+            )
+        pl_module.log("steady_state_achieved", torch.tensor(int(self.steady_state_achieved), dtype=torch.float), sync_dist=False, rank_zero_only=True)
 
+    def _is_steady_state_utilization(self):
+        steady_states = []
+        for i, v in self.gpu_metrics.items():
+            if self.gpu_metrics[i].maxlen == len(self.gpu_metrics[i]):
+                steady_states.append(
+                    is_steady_state(
+                        *self.gpu_metrics[i], rtol=self.rtol, atol=self.atol
+                    )
+                )
 
+        return len(steady_states) == len(self.gpu_metrics) and all(steady_states)
+
+    def _is_steady_state_iteration_speed(
+        self,
+    ):
+        if len(self.iteration_speeds) == self.iteration_speeds.maxlen:
+            return is_steady_state(*self.iteration_speeds, rtol=self.rtol, atol=self.atol)
+        return False
+
+    @staticmethod
+    def _average_postfix(average: Optional[float] = None):
+        if average is None:
+            return ""
+        return f"_averaged{average}"

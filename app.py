@@ -8,7 +8,8 @@ import os, torch
 from lightning_gpt import models
 from lit_llms.tensorboard import DriveTensorBoardLogger, MultiNodeLightningTrainerWithTensorboard
 
-from lai_textpred import default_callbacks, gpt_20b, WordDataset, error_if_local
+from lai_textpred import default_callbacks, gpt_20b, WordDataset, error_if_local, gpt_1_7b
+from lai_textpred.cost_estimation import CostEstimationCallback
 
 
 class WordPrediction(L.LightningWork):
@@ -26,7 +27,7 @@ class WordPrediction(L.LightningWork):
             text = f.read()
         train_dataset = WordDataset(text, 5)
         train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=1, num_workers=4, shuffle=True
+            train_dataset, batch_size=160, num_workers=8, shuffle=True, pin_memory=True
         )
 
         # --------------------
@@ -34,16 +35,18 @@ class WordPrediction(L.LightningWork):
         # --------------------
         model = models.DeepSpeedMinGPT(
             vocab_size=train_dataset.vocab_size, block_size=int(train_dataset.block_size),
-            fused_adam=False, model_type=None, **gpt_20b,
+            fused_adam=False, model_type=None,
+            **gpt_20b,
+            # **gpt_1_7b,
         )
 
         # -----------------
         # RUN YOUR TRAINING
         # -----------------
         trainer = L.Trainer(
-            max_epochs=2, limit_train_batches=250,
+            max_epochs=2, limit_train_batches=25000,
             precision=16, strategy="deepspeed_stage_3_offload",
-            callbacks=default_callbacks(), log_every_n_steps=5,
+            callbacks=default_callbacks() + [CostEstimationCallback(4.5, 'gpu-fast-multi', train_loader.batch_size)], log_every_n_steps=1,
             logger=DriveTensorBoardLogger(save_dir=".", drive=self.tensorboard_drive),
         )
         trainer.fit(model, train_loader)
@@ -53,6 +56,7 @@ app = L.LightningApp(
     MultiNodeLightningTrainerWithTensorboard(
         WordPrediction,
         num_nodes=3,
+        # num_nodes=1,
         cloud_compute=L.CloudCompute("gpu-fast-multi"),
     )
 )
