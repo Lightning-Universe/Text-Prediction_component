@@ -23,19 +23,21 @@
 
 ______________________________________________________________________
 
-Use Lightning train large language model for text generation, 
-with as many parameters as you want (up to billions!). 
+Use Lightning train large language model for text generation,
+with as many parameters as you want (up to billions!).
 
 You can do this:
-* using multiple GPUs
-* across multiple machines
-* with the most advanced and efficient training techniques
-* on your own data
-* all without any infrastructure hassle! 
+
+- using multiple GPUs
+- across multiple machines
+- with the most advanced and efficient training techniques
+- on your own data
+- all without any infrastructure hassle!
 
 All handled easily with the [Lightning Apps framework](https://lightning.ai/lightning-docs/).
 
 ### Prediction Example
+
 A typical example of text prediction could look like this:
 
 _Prompt:_ `Please be aware of the`
@@ -55,7 +57,10 @@ To run paste the following code snippet in a file `app.py`:
 import lightning as L
 import os, torch
 from lightning_gpt import models
-from lit_llms.tensorboard import DriveTensorBoardLogger, MultiNodeLightningTrainerWithTensorboard
+from lit_llms.tensorboard import (
+    DriveTensorBoardLogger,
+    MultiNodeLightningTrainerWithTensorboard,
+)
 
 from lai_textpred import default_callbacks, gpt_20b, WordDataset, error_if_local
 
@@ -82,17 +87,23 @@ class WordPrediction(L.LightningWork):
         # CONFIGURE YOUR MODE
         # --------------------
         model = models.DeepSpeedMinGPT(
-            vocab_size=train_dataset.vocab_size, block_size=int(train_dataset.block_size),
-            fused_adam=False, model_type=None, **gpt_20b,
+            vocab_size=train_dataset.vocab_size,
+            block_size=int(train_dataset.block_size),
+            fused_adam=False,
+            model_type=None,
+            **gpt_20b,
         )
 
         # -----------------
         # RUN YOUR TRAINING
         # -----------------
         trainer = L.Trainer(
-            max_epochs=2, limit_train_batches=250,
-            precision=16, strategy="deepspeed_stage_3_offload",
-            callbacks=default_callbacks(), log_every_n_steps=5,
+            max_epochs=2,
+            limit_train_batches=250,
+            precision=16,
+            strategy="deepspeed_stage_3_offload",
+            callbacks=default_callbacks(),
+            log_every_n_steps=5,
             logger=DriveTensorBoardLogger(save_dir=".", drive=self.tensorboard_drive),
         )
         trainer.fit(model, train_loader)
@@ -115,9 +126,9 @@ lightning run app app.py --cloud
 
 Don't want to use the public cloud? Contact us at `product@lightning.ai` for early access to run on your private cluster (BYOC)!
 
-
 ### Running locally
-This example is optimized for the cloud. 
-It is therefore not possible to run this app locally. 
-Please refer to [our text classification example](https://github.com/Lightning-AI/LAI-Text-Classification-Component) 
+
+This example is optimized for the cloud.
+It is therefore not possible to run this app locally.
+Please refer to [our text classification example](https://github.com/Lightning-AI/LAI-Text-Classification-Component)
 for a similar app to run locally.
