@@ -8,8 +8,7 @@ import os, torch
 from lightning_gpt import models
 from lit_llms.tensorboard import DriveTensorBoardLogger, MultiNodeLightningTrainerWithTensorboard
 
-from lai_textpred import default_callbacks, gpt_20b, WordDataset, error_if_local, gpt_1_7b
-from lai_textpred.cost_estimation import CostEstimationCallback
+from lai_textpred import default_callbacks, gpt_20b, WordDataset, error_if_local
 
 
 class WordPrediction(L.LightningWork):
@@ -27,7 +26,7 @@ class WordPrediction(L.LightningWork):
             text = f.read()
         train_dataset = WordDataset(text, 5)
         train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=160, num_workers=8, shuffle=True, pin_memory=True
+            train_dataset, batch_size=128, num_workers=8, shuffle=True, pin_memory=True
         )
 
         # --------------------
@@ -46,7 +45,7 @@ class WordPrediction(L.LightningWork):
         trainer = L.Trainer(
             max_epochs=2, limit_train_batches=25000,
             precision=16, strategy="deepspeed_stage_3_offload",
-            callbacks=default_callbacks() + [CostEstimationCallback(4.5, 'gpu-fast-multi', train_loader.batch_size)], log_every_n_steps=1,
+            callbacks=default_callbacks(target_loss_val=4.5), log_every_n_steps=1,
             logger=DriveTensorBoardLogger(save_dir=".", drive=self.tensorboard_drive),
         )
         trainer.fit(model, train_loader)
@@ -56,7 +55,6 @@ app = L.LightningApp(
     MultiNodeLightningTrainerWithTensorboard(
         WordPrediction,
         num_nodes=3,
-        # num_nodes=1,
         cloud_compute=L.CloudCompute("gpu-fast-multi"),
     )
 )
