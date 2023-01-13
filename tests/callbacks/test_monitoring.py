@@ -5,9 +5,7 @@ import lightning
 import pytest
 import torch
 
-from lai_textpred.callbacks import (
-    GPUMonitoringCallback,
-)
+from lai_textpred.callbacks import GPUMonitoringCallback
 from lai_textpred.moving_average import MovingAverage
 from tests.helpers import setup_ddp
 

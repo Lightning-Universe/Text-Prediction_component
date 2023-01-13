@@ -1,14 +1,13 @@
+from typing import cast
 from unittest.mock import MagicMock
 
 import lightning.pytorch.strategies
 import pytest
 import torch
+from lightning_gpt import DeepSpeedNanoGPT
 
 from lai_textpred.callbacks.steady_state_detection import SteadyStateDetection
 from lai_textpred.steady_state_utils import chinchilla_metric_samples
-from typing import cast
-from lightning_gpt import DeepSpeedNanoGPT
-
 from tests.helpers import setup_ddp
 
 

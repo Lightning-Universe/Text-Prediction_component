@@ -1,9 +1,8 @@
 import time
 from typing import Any, Dict
 
-import torch
-
 import lightning
+import torch
 
 from lai_textpred.moving_average import MovingAverage
 

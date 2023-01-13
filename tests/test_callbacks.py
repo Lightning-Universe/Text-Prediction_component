@@ -1,10 +1,7 @@
 import lightning
 
+from lai_textpred.callbacks import GPUMonitoringCallback, default_callbacks
 
-from lai_textpred.callbacks import (
-    GPUMonitoringCallback,
-    default_callbacks,
-)
 
 # TODO: check for arguments
 def test_default_callbacks():

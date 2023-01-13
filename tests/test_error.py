@@ -1,7 +1,7 @@
 import sys
+from unittest import mock
 
 import pytest
-from unittest import mock
 
 
 @mock.patch("lightning.app.utilities.cloud.is_running_in_cloud", return_value=False)
