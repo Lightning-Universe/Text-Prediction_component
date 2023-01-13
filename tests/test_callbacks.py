@@ -1,11 +1,12 @@
 import lightning
 import pytest
 
-from lai_textpred.callbacks import (
+from lit_llms.callbacks import (
     GPUMonitoringCallback,
     SteadyStateDetection,
-    default_callbacks,
 )
+
+from lai_textpred.callbacks import default_callbacks
 
 
 @pytest.mark.parametrize("target_loss_val", [None, 0.1])

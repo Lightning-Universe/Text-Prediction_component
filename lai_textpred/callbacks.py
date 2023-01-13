@@ -2,8 +2,8 @@ from typing import List, Optional
 
 import lightning
 
-from lai_textpred.callbacks.monitoring import GPUMonitoringCallback
-from lai_textpred.callbacks.steady_state_detection import SteadyStateDetection
+from lit_llms.callbacks.monitoring import GPUMonitoringCallback
+from lit_llms.callbacks.steady_state_detection import SteadyStateDetection
 
 
 def default_callbacks(
