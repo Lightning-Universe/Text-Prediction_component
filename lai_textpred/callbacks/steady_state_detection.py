@@ -26,7 +26,7 @@ class SteadyStateDetection(lightning.pytorch.callbacks.model_summary.ModelSummar
         steady_state_det_mode: str = "iter_speed",
         average: Optional[float] = None,
         moving_average_window: int = 10,
-        stop_on_steady_state: bool = False,
+        stop_on_steady_state: bool = True,
         steady_state_steps_before_stop: int = 10,
         gpu_util_logname: str = "gpu_stats/utilization",
         time_per_batch_logname: str = "time/seconds_per_iter",
@@ -73,19 +73,22 @@ class SteadyStateDetection(lightning.pytorch.callbacks.model_summary.ModelSummar
 
         return chinchilla_metric_samples(self.target_loss, self.num_params)
 
-    def on_fit_start(
+    def on_train_batch_start(
         self,
         trainer: lightning.pytorch.Trainer,
         pl_module: lightning.pytorch.LightningModule,
+        batch: Any,
+        batch_idx: int,
     ) -> None:
         if self.num_params is None:
             model_summary = self._summary(trainer, pl_module)
             self.num_params = model_summary.trainable_parameters
 
-    def on_train_batch_start(
+    def on_train_batch_end(
         self,
         trainer: lightning.pytorch.Trainer,
         pl_module: lightning.pytorch.LightningModule,
+        outputs: Any,
         batch: Any,
         batch_idx: int,
     ) -> None:
@@ -121,13 +124,15 @@ class SteadyStateDetection(lightning.pytorch.callbacks.model_summary.ModelSummar
             self.steady_state_achieved = self._steady_state_func()
 
         should_stop = False
+        # only rank 0 can enter this
         if self.steady_state_achieved:
             speed_per_batch_averaged = metrics[
                 self.time_per_batch_logname + self._average_postfix(10)
             ]
             # reflect current number of batches
             tpn = calc_total_time_per_node(
-                self.num_samples_required - trainer.global_step * self.batch_size * trainer.world_size,
+                self.num_samples_required
+                - trainer.global_step * self.batch_size * trainer.world_size,
                 trainer.world_size,
                 self.batch_size,
                 speed_per_batch_averaged,
@@ -152,12 +157,21 @@ class SteadyStateDetection(lightning.pytorch.callbacks.model_summary.ModelSummar
                 )
                 should_stop = True
 
-        if compare_version('lightning', operator.ge, '2.0.0'):
-            global_should_stop = trainer.strategy.reduce_boolean_decision(should_stop, all=False)
+        # only rank0 decides as this is the only one that has the metrics
+        stop_tensor = torch.tensor(should_stop, device=trainer.strategy.root_device)
+
+        trainer.strategy.broadcast(stop_tensor, src=0)
+
+        if compare_version("lightning", operator.ge, "2.0.0"):
+            global_should_stop = trainer.strategy.reduce_boolean_decision(
+                should_stop, all=False
+            )
         else:
             # backport of reduce_boolean_decision with all=False to lightning < 2.0.0
-            decision = torch.tensor(int(should_stop), device=trainer.strategy.root_device)
-            decision = trainer.strategy.reduce(decision, reduce_op='sum')
+            decision = torch.tensor(
+                int(should_stop), device=trainer.strategy.root_device
+            )
+            decision = trainer.strategy.reduce(decision, reduce_op="sum")
             global_should_stop = bool(decision > 0)
         trainer.should_stop = global_should_stop
 

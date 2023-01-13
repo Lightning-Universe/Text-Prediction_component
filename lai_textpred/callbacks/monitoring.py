@@ -8,7 +8,6 @@ import lightning
 from lai_textpred.moving_average import MovingAverage
 
 
-
 class GPUMonitoringCallback(lightning.pytorch.callbacks.Callback):
     def __init__(
         self,

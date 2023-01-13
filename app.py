@@ -8,7 +8,7 @@ import os, torch
 from lightning_gpt import models
 from lit_llms.tensorboard import DriveTensorBoardLogger, MultiNodeLightningTrainerWithTensorboard
 
-from lai_textpred import default_callbacks, gpt_20b, WordDataset, error_if_local
+from lai_textpred import default_callbacks, gpt_20b, WordDataset, error_if_local, gpt_1_7b
 
 
 class WordPrediction(L.LightningWork):
@@ -26,7 +26,7 @@ class WordPrediction(L.LightningWork):
             text = f.read()
         train_dataset = WordDataset(text, 5)
         train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=128, num_workers=8, shuffle=True, pin_memory=True
+            train_dataset, batch_size=160, num_workers=8, shuffle=True, pin_memory=True
         )
 
         # --------------------
@@ -35,8 +35,8 @@ class WordPrediction(L.LightningWork):
         model = models.DeepSpeedMinGPT(
             vocab_size=train_dataset.vocab_size, block_size=int(train_dataset.block_size),
             fused_adam=False, model_type=None,
-            **gpt_20b,
-            # **gpt_1_7b,
+            # **gpt_20b,
+            **gpt_1_7b,
         )
 
         # -----------------
