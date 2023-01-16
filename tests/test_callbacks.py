@@ -1,10 +1,6 @@
 import lightning
 import pytest
-
-from lit_llms.callbacks import (
-    GPUMonitoringCallback,
-    SteadyStateDetection,
-)
+from lit_llms.callbacks import GPUMonitoringCallback, SteadyStateDetection
 
 from lai_textpred.callbacks import default_callbacks
 

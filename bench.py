@@ -3,12 +3,17 @@
 #! curl https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt --create-dirs -o ${HOME}/data/shakespeare/input.txt -C -
 
 
-import lightning as L
-import os, torch
-from lightning_gpt import models
-from lit_llms.tensorboard import DriveTensorBoardLogger, MultiNodeLightningTrainerWithTensorboard
+import os
 
-from lai_textpred import default_callbacks, gpt_1_7b, WordDataset, error_if_local
+import lightning as L
+import torch
+from lightning_gpt import models
+from lit_llms.tensorboard import (
+    DriveTensorBoardLogger,
+    MultiNodeLightningTrainerWithTensorboard,
+)
+
+from lai_textpred import WordDataset, default_callbacks, error_if_local, gpt_1_7b
 
 
 class WordPrediction(L.LightningWork):
@@ -33,18 +38,23 @@ class WordPrediction(L.LightningWork):
         # CONFIGURE YOUR MODE
         # --------------------
         model = models.DeepSpeedMinGPT(
-            vocab_size=train_dataset.vocab_size, block_size=int(train_dataset.block_size),
-            fused_adam=False, model_type=None,
-            **gpt_1_7b,
+            vocab_size=train_dataset.vocab_size,
+            block_size=int(train_dataset.block_size),
+            fused_adam=False,
+            model_type=None,
+            **gpt_1_7b
         )
 
         # -----------------
         # RUN YOUR TRAINING
         # -----------------
         trainer = L.Trainer(
-            max_epochs=2, limit_train_batches=25000,
-            precision=16, strategy="deepspeed_stage_3_offload",
-            callbacks=default_callbacks(target_loss_val=4.5), log_every_n_steps=1,
+            max_epochs=2,
+            limit_train_batches=25000,
+            precision=16,
+            strategy="deepspeed_stage_3_offload",
+            callbacks=default_callbacks(target_loss_val=4.5),
+            log_every_n_steps=1,
             logger=DriveTensorBoardLogger(save_dir=".", drive=self.tensorboard_drive),
         )
         trainer.fit(model, train_loader)
@@ -53,7 +63,7 @@ class WordPrediction(L.LightningWork):
 app = L.LightningApp(
     MultiNodeLightningTrainerWithTensorboard(
         WordPrediction,
-        num_nodes=3,
+        num_nodes=2,
         cloud_compute=L.CloudCompute("gpu-fast-multi"),
     )
 )
