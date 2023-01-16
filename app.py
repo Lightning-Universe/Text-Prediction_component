@@ -6,7 +6,7 @@
 import lightning as L
 import os, torch
 from lightning_gpt import models
-from lit_llms.tensorboard import DriveTensorBoardLogger,MultiNodeLightningTrainerWithTensorboard
+from lit_llms.tensorboard import DriveTensorBoardLogger, MultiNodeLightningTrainerWithTensorboard
 
 from lai_textpred import default_callbacks, gpt_20b, WordDataset, error_if_local
 
