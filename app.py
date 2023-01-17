@@ -34,7 +34,7 @@ class WordPrediction(L.LightningWork):
         # --------------------
         model = models.DeepSpeedMinGPT(
             vocab_size=train_dataset.vocab_size, block_size=int(train_dataset.block_size),
-            fused_adam=False, model_type=None, **gpt_20b,
+            fused_adam=False,  **gpt_20b,
         )
 
         # -----------------

@@ -13,7 +13,15 @@ from lit_llms.tensorboard import (
     MultiNodeLightningTrainerWithTensorboard,
 )
 
-from lai_textpred import WordDataset, default_callbacks, error_if_local, gpt_1_7b
+from lai_textpred import (
+    WordDataset,
+    default_callbacks,
+    error_if_local,
+    gpt_1_7b,
+    gpt_10b,
+    gpt_20b,
+    gpt_45b,
+)
 
 
 class WordPrediction(L.LightningWork):
@@ -23,6 +31,10 @@ class WordPrediction(L.LightningWork):
 
     def run(self):
         error_if_local()
+        # torch.backends.cudnn.deterministic = False
+        # torch.backends.cudnn.benchmark = True
+        # torch.backends.cudnn.allow_tf32 = False
+        # torch.backends.cuda.matmul.allow_tf32 = False
 
         # -------------------
         # CONFIGURE YOUR DATA
@@ -30,8 +42,10 @@ class WordPrediction(L.LightningWork):
         with open(os.path.expanduser("~/data/shakespeare/input.txt")) as f:
             text = f.read()
         train_dataset = WordDataset(text, 5)
+
+
         train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=160, num_workers=8, shuffle=True, pin_memory=True
+            train_dataset, batch_size=12, num_workers=8, shuffle=True, pin_memory=True
         )
 
         # --------------------
@@ -41,8 +55,7 @@ class WordPrediction(L.LightningWork):
             vocab_size=train_dataset.vocab_size,
             block_size=int(train_dataset.block_size),
             fused_adam=False,
-            model_type=None,
-            **gpt_1_7b
+            **gpt_20b
         )
 
         # -----------------
@@ -63,7 +76,7 @@ class WordPrediction(L.LightningWork):
 app = L.LightningApp(
     MultiNodeLightningTrainerWithTensorboard(
         WordPrediction,
-        num_nodes=2,
-        cloud_compute=L.CloudCompute("gpu-fast-multi"),
+        num_nodes=3,
+        cloud_compute=L.CloudCompute("gpu-fast-multi", ),
     )
 )
