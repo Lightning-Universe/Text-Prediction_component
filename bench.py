@@ -3,12 +3,25 @@
 #! curl https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt --create-dirs -o ${HOME}/data/shakespeare/input.txt -C -
 
 
-import lightning as L
-import os, torch
-from lightning_gpt import models
-from lit_llms.tensorboard import DriveTensorBoardLogger, MultiNodeLightningTrainerWithTensorboard
+import os
 
-from lai_textpred import default_callbacks, gpt_20b, WordDataset, error_if_local
+import lightning as L
+import torch
+from lightning_gpt import models
+from lit_llms.tensorboard import (
+    DriveTensorBoardLogger,
+    MultiNodeLightningTrainerWithTensorboard,
+)
+
+from lai_textpred import (
+    WordDataset,
+    default_callbacks,
+    error_if_local,
+    gpt_1_7b,
+    gpt_10b,
+    gpt_20b,
+    gpt_45b,
+)
 
 
 class WordPrediction(L.LightningWork):
@@ -18,6 +31,10 @@ class WordPrediction(L.LightningWork):
 
     def run(self):
         error_if_local()
+        # torch.backends.cudnn.deterministic = False
+        # torch.backends.cudnn.benchmark = True
+        # torch.backends.cudnn.allow_tf32 = False
+        # torch.backends.cuda.matmul.allow_tf32 = False
 
         # -------------------
         # CONFIGURE YOUR DATA
@@ -25,25 +42,32 @@ class WordPrediction(L.LightningWork):
         with open(os.path.expanduser("~/data/shakespeare/input.txt")) as f:
             text = f.read()
         train_dataset = WordDataset(text, 5)
+
+
         train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=1, num_workers=4, shuffle=True
+            train_dataset, batch_size=12, num_workers=8, shuffle=True, pin_memory=True
         )
 
         # --------------------
         # CONFIGURE YOUR MODE
         # --------------------
         model = models.DeepSpeedMinGPT(
-            vocab_size=train_dataset.vocab_size, block_size=int(train_dataset.block_size),
-            fused_adam=False,  **gpt_20b,
+            vocab_size=train_dataset.vocab_size,
+            block_size=int(train_dataset.block_size),
+            fused_adam=False,
+            **gpt_20b
         )
 
         # -----------------
         # RUN YOUR TRAINING
         # -----------------
         trainer = L.Trainer(
-            max_epochs=2, limit_train_batches=250,
-            precision=16, strategy="deepspeed_stage_3_offload",
-            callbacks=default_callbacks(), log_every_n_steps=5,
+            max_epochs=2,
+            limit_train_batches=25000,
+            precision=16,
+            strategy="deepspeed_stage_3_offload",
+            callbacks=default_callbacks(target_loss_val=4.5),
+            log_every_n_steps=1,
             logger=DriveTensorBoardLogger(save_dir=".", drive=self.tensorboard_drive),
         )
         trainer.fit(model, train_loader)
@@ -53,6 +77,6 @@ app = L.LightningApp(
     MultiNodeLightningTrainerWithTensorboard(
         WordPrediction,
         num_nodes=3,
-        cloud_compute=L.CloudCompute("gpu-fast-multi"),
+        cloud_compute=L.CloudCompute("gpu-fast-multi", ),
     )
 )
