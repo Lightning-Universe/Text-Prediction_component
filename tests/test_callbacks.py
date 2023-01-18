@@ -12,6 +12,11 @@ from lai_textpred.callbacks import (
 )
 from tests.helpers import setup_ddp
 
+try:
+    from lightning.lite.utilities.distributed import _all_gather_ddp_if_available
+except ImportError:
+    from lightning.fabric.utilities.distributed import _all_gather_ddp_if_available
+
 
 def test_default_callbacks():
     assert isinstance(default_callbacks()[0], lightning.pytorch.callbacks.EarlyStopping)
@@ -149,9 +154,7 @@ def _custom_monitoring_callback_train_mock(rank, world_size):
     trainer.global_rank = rank
     strategy = mock.MagicMock()
     strategy.root_device = torch.device("cpu")
-    strategy.all_gather = (
-        lightning.lite.utilities.distributed._all_gather_ddp_if_available
-    )
+    strategy.all_gather = _all_gather_ddp_if_available
     trainer.strategy = strategy
 
     logger = mock.MagicMock()
