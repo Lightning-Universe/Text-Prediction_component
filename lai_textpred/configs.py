@@ -25,15 +25,15 @@ gpt_1_7b = _build_gpt_config(
 )  # requires 2GB per GPU on 8 GPUs, 5.1 GB on 1 GPU
 
 gpt_2_9b = _build_gpt_config(
-    None, None, None, "gpt2_xxl"
+    None, None, None, "gpt2-xxl"
 )
 
 gpt_4_4b = _build_gpt_config(
-    None, None, None, "gpt2_xxxl"
+    None, None, None, "gpt2-xxxl"
 )
 
 gpt_8_4b = _build_gpt_config(
-    None, None, None, 'gpt2_4xl'
+    None, None, None, 'gpt2-4xl'
 )
 
 gpt_10b = _build_gpt_config(

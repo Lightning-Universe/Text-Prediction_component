@@ -9,6 +9,7 @@ def default_callbacks(
     target_loss_val: Optional[float] = None,
     gpu_util_logname: str = "gpu_stats/utilization",
     time_per_batch_logname: str = "time/seconds_per_iter",
+        detect_steady_state: bool = False
 ) -> List[lightning.pytorch.Callback]:
     early_stopping = lightning.pytorch.callbacks.EarlyStopping(
         monitor="train_loss",
@@ -31,12 +32,12 @@ def default_callbacks(
         ),
     ]
 
-    if target_loss_val is not None:
+    if detect_steady_state:
         cbs.append(
             SteadyStateDetection(
                 target_loss_val,
                 gpu_util_logname=gpu_util_logname,
                 time_per_batch_logname=time_per_batch_logname,
             )
-        )
+            )
     return cbs
