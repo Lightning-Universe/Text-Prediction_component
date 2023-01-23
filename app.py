@@ -1,5 +1,4 @@
-#! pip install light-the-torch
-#! ltt install --upgrade git+https://github.com/Lightning-AI/lightning-LLMs git+https://github.com/Lightning-AI/LAI-Text-Prediction-Component
+#! pip install git+https://github.com/Lightning-AI/lightning-LLMs git+https://github.com/Lightning-AI/LAI-Text-Prediction-Component
 #! curl https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt --create-dirs -o ${HOME}/data/shakespeare/input.txt -C -
 
 
@@ -26,7 +25,7 @@ class WordPrediction(L.LightningWork):
             text = f.read()
         train_dataset = WordDataset(text, 5)
         train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=1, num_workers=4, shuffle=True
+            train_dataset, batch_size=160, num_workers=4, shuffle=True
         )
 
         # --------------------
