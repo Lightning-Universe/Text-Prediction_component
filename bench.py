@@ -1,19 +1,21 @@
-#! pip install light-the-torch
-#! pip install --upgrade git+https://github.com/Lightning-AI/lightning-LLMs git+https://github.com/Lightning-AI/LAI-Text-Prediction-Component
+#! pip install git+https://github.com/Lightning-AI/lightning-LLMs git+https://github.com/Lightning-AI/LAI-Text-Prediction-Component
 #! curl https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt --create-dirs -o ${HOME}/data/shakespeare/input.txt -C -
 
-
+import glob
+import json
 import os
-from typing import Any, List, Mapping, Type
+import sys
+import threading
+import time
 
 import lightning as L
+import psutil
 import torch
-from lightning.app.utilities.exceptions import ExitAppException
 from lightning_gpt import models
 from lit_llms.tensorboard import (
-    DriveTensorBoardLogger,
-    MultiNodeLightningTrainerWithTensorboard, TensorBoardWork,
+    MultiNodeLightningTrainerWithTensorboard, DriveTensorBoardLogger,
 )
+
 
 from lai_textpred import (
     WordDataset,
@@ -21,12 +23,88 @@ from lai_textpred import (
     error_if_local,
     gpt_1_7b,
     gpt_2_9b,
-gpt_4_4b,
-gpt_8_4b,
+    gpt_4_4b,
+    gpt_8_4b,
     gpt_10b,
     gpt_20b,
     gpt_45b,
 )
+
+class NetIOMonitor:
+    def __init__(self, time_resolution, dump_at, file_path):
+        self.time_resolution = time_resolution
+        self.dump_at = dump_at
+        self.vals = None
+        self.file_path = file_path
+        self.last_dump = 0
+
+    def reset_vals(self):
+        self.vals = []
+
+    def dump_vals(self):
+        print(f'dumping {len(self.vals)} values with a size of {sys.getsizeof(self.vals)/1024} MB')
+
+        file_path = self.file_path.format(part=self.last_dump + 1)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, 'w') as f:
+            json.dump(self.vals, f)
+
+        self.last_dump += 1
+
+    @staticmethod
+    def _get_vals():
+        net_vals = psutil.net_io_counters()._asdict()
+        for k in ('errin', 'errout', 'dropin', 'dropout'):
+            net_vals.pop(k)
+
+        return net_vals
+    def __call__(self):
+        self.reset_vals()
+        while True:
+            self.vals.append((time.time(), self._get_vals()))
+            time.sleep(self.time_resolution)
+
+            if len(self.vals) >= self.dump_at:
+                self.dump_vals()
+                self.reset_vals()
+
+    @staticmethod
+    def _get_id_from_filename(fname: str, split_sep: str = '-', keyword: str = 'rank'):
+        fname = os.path.basename(fname)
+        fname_splits = fname.split(split_sep)
+        for split in fname_splits:
+            if split.startswith(keyword):
+                return int(split.replace(keyword, '').replace('.json', ''))
+    @staticmethod
+    def collect(filepath):
+        files = sorted(glob.glob(os.path.join(os.path.dirname, filepath, '*.json')))
+        all_ranks = set([NetIOMonitor._get_id_from_filename(f, '-', 'rank') for f in files])
+        per_rank = {i: sorted([f for f in files if NetIOMonitor._get_id_from_filename(f, '-', 'rank') == i]) for i in all_ranks}
+
+        per_rank_data = {i: [] for i in all_ranks}
+        for rank, files in per_rank.items():
+            for curr_file in files:
+                with open(curr_file, 'r') as f:
+                    per_rank_data[rank] += json.load(f)
+        return {i: sorted(per_rank_data[i], key=lambda x: x[0]) for i in all_ranks} # sort by time
+
+class NetIOCallback(L.pytorch.Callback):
+    def __init__(self, time_resolution, dump_at, file_path):
+        self.time_resolution = time_resolution
+        self.dump_at = dump_at
+        self.file_path = file_path
+        self.monitor = None
+
+    def on_train_start(self, trainer, pl_module):
+        self.monitor = NetIOMonitor(self.time_resolution, self.dump_at, self.file_path.format(rank=trainer.global_rank))
+        self.monitor.reset_vals()
+        self.monitor_thread = threading.Thread(target=self.monitor, daemon=True)
+        self.monitor_thread.start()
+
+    def on_train_end(self, trainer, pl_module):
+        self.monitor_thread._stop()
+        self.monitor_thread.join()
+
 
 class WordPrediction(L.LightningWork):
     def __init__(self, *args, tb_drive, **kwargs):
@@ -35,10 +113,6 @@ class WordPrediction(L.LightningWork):
 
     def run(self):
         error_if_local()
-        # torch.backends.cudnn.deterministic = False
-        # torch.backends.cudnn.benchmark = True
-        # torch.backends.cudnn.allow_tf32 = False
-        # torch.backends.cuda.matmul.allow_tf32 = False
 
         # -------------------
         # CONFIGURE YOUR DATA
@@ -46,76 +120,34 @@ class WordPrediction(L.LightningWork):
         with open(os.path.expanduser("~/data/shakespeare/input.txt")) as f:
             text = f.read()
         train_dataset = WordDataset(text, 5)
-
-
         train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=160, num_workers=8, shuffle=True, pin_memory=True
+            train_dataset, batch_size=1, num_workers=4, shuffle=True
         )
 
         # --------------------
         # CONFIGURE YOUR MODE
         # --------------------
         model = models.DeepSpeedMinGPT(
-            vocab_size=train_dataset.vocab_size,
-            block_size=int(train_dataset.block_size),
-            fused_adam=False,
-            **gpt_4_4b,
+            vocab_size=train_dataset.vocab_size, block_size=int(train_dataset.block_size),
+            fused_adam=False,  **gpt_20b,
         )
 
         # -----------------
         # RUN YOUR TRAINING
         # -----------------
         trainer = L.Trainer(
-            max_epochs=2,
-            limit_train_batches=25000,
-            precision=16,
-            strategy="deepspeed_stage_3_offload",
-            callbacks=default_callbacks(detect_steady_state=True),
-            log_every_n_steps=1,
+            max_epochs=2, limit_train_batches=250,
+            precision=16, strategy="deepspeed_stage_3_offload",
+            callbacks=default_callbacks(), log_every_n_steps=5,
             logger=DriveTensorBoardLogger(save_dir=".", drive=self.tensorboard_drive),
         )
         trainer.fit(model, train_loader)
 
-class CustomMultiNodeLightningTrainerWithTensorboard(L.LightningFlow):
-    def __init__(
-        self,
-        work_cls: Type[L.LightningWork],
-        num_nodes: int,
-        cloud_compute: L.CloudCompute,
-        quit_tb_with_training: bool = True,
-    ):
-        super().__init__()
-        tb_drive = L.app.storage.Drive("lit://tb_drive")
-
-        self.multinode = L.app.components.LightningTrainerMultiNode(
-            work_cls,
-            num_nodes=num_nodes,
-            cloud_compute=cloud_compute,
-            tb_drive=tb_drive,
-        )
-
-        self.tb_drive = tb_drive
-
-        self.tensorboard_work = TensorBoardWork(drive=self.tb_drive)
-
-        self.quit_tb_with_training = quit_tb_with_training
-
-    def run(self, *args: Any, **kwargs: Any) -> None:
-        if self.quit_tb_with_training and self.tensorboard_work.is_running and all([w.has_succeeded for w in self.multinode.ws]):
-            self.tensorboard_work.stop()
-            raise ExitAppException
-
-        self.multinode.run(*args, **kwargs)
-        if any([w.is_running for w in self.multinode.ws]):
-            self.tensorboard_work.run()
-
-    def configure_layout(self) -> List[Mapping[str, str]]:
-        return [{"name": "Training Logs", "content": self.tensorboard_work.url}]
 
 app = L.LightningApp(
-    CustomMultiNodeLightningTrainerWithTensorboard(
+    MultiNodeLightningTrainerWithTensorboard(
         WordPrediction,
-        num_nodes=4,
-        cloud_compute=L.CloudCompute("gpu-fast-multi", shm_size=2048),
+        num_nodes=3,
+        cloud_compute=L.CloudCompute("gpu-fast-multi"),
     )
 )
