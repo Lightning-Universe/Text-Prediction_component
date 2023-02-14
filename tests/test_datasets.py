@@ -38,7 +38,4 @@ def test_remove_punctuation():
     text_no_punct = WordDataset.remove_punctuation(
         "Hello! My Name is Foo; I'm a Bar. Who are you? - I'm a Bar too, named: Faa"
     )
-    assert (
-        text_no_punct
-        == "Hello My Name is Foo Im a Bar Who are you  Im a Bar too named Faa"
-    )
+    assert text_no_punct == "Hello My Name is Foo Im a Bar Who are you  Im a Bar too named Faa"
