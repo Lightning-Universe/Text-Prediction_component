@@ -2,10 +2,8 @@
 #! curl https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt --create-dirs -o ${HOME}/data/shakespeare/input.txt -C -
 
 
-import os
-
 import lightning as L
-import torch
+import os, torch
 from lightning_gpt import models
 from lit_llms.tensorboard import DriveTensorBoardLogger, MultiNodeLightningTrainerWithTensorboard
 
@@ -26,29 +24,25 @@ class WordPrediction(L.LightningWork):
         with open(os.path.expanduser("~/data/shakespeare/input.txt")) as f:
             text = f.read()
         train_dataset = WordDataset(text, 5)
-        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=160, num_workers=4, shuffle=True)
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=160, num_workers=4, shuffle=True
+        )
 
         # --------------------
         # CONFIGURE YOUR MODE
         # --------------------
         model = models.DeepSpeedMinGPT(
-            vocab_size=train_dataset.vocab_size,
-            block_size=int(train_dataset.block_size),
-            fused_adam=False,
-            model_type=None,
-            **gpt_20b,
+            vocab_size=train_dataset.vocab_size, block_size=int(train_dataset.block_size),
+            fused_adam=False, model_type=None, **gpt_20b,
         )
 
         # -----------------
         # RUN YOUR TRAINING
         # -----------------
         trainer = L.Trainer(
-            max_epochs=2,
-            limit_train_batches=250,
-            precision=16,
-            strategy="deepspeed_stage_3_offload",
-            callbacks=default_callbacks(),
-            log_every_n_steps=5,
+            max_epochs=2, limit_train_batches=250,
+            precision=16, strategy="deepspeed_stage_3_offload",
+            callbacks=default_callbacks(), log_every_n_steps=5,
             logger=DriveTensorBoardLogger(save_dir=".", drive=self.tensorboard_drive),
         )
         trainer.fit(model, train_loader)
