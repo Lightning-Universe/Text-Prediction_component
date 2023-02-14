@@ -5,11 +5,7 @@ import lightning
 import pytest
 import torch
 
-from lai_textpred.callbacks import (
-    CustomMonitoringCallback,
-    MovingAverage,
-    default_callbacks,
-)
+from lai_textpred.callbacks import CustomMonitoringCallback, MovingAverage, default_callbacks
 from tests.helpers import setup_ddp
 
 try:
@@ -20,9 +16,7 @@ except ImportError:
 
 def test_default_callbacks():
     assert isinstance(default_callbacks()[0], lightning.pytorch.callbacks.EarlyStopping)
-    assert isinstance(
-        default_callbacks()[1], lightning.pytorch.callbacks.ModelCheckpoint
-    )
+    assert isinstance(default_callbacks()[1], lightning.pytorch.callbacks.ModelCheckpoint)
     assert isinstance(default_callbacks()[2], lightning.pytorch.callbacks.Callback)
     assert isinstance(default_callbacks()[2], CustomMonitoringCallback)
 
@@ -177,14 +171,8 @@ def _custom_monitoring_callback_train_mock(rank, world_size):
     # utilization per rank + max memory per rank
     assert len(logger.log_metrics.call_args[-1]["metrics"]) == 2 * world_size
     for i in range(world_size):
-        assert (
-            f"gpu_stats/utilization_rank{i}"
-            in logger.log_metrics.call_args[-1]["metrics"]
-        )
-        assert (
-            f"gpu_stats/max_memory_rank{i}"
-            in logger.log_metrics.call_args[-1]["metrics"]
-        )
+        assert f"gpu_stats/utilization_rank{i}" in logger.log_metrics.call_args[-1]["metrics"]
+        assert f"gpu_stats/max_memory_rank{i}" in logger.log_metrics.call_args[-1]["metrics"]
 
     callback.on_train_batch_start(trainer, module, None, 1)
     assert callback.last_batch_start_time is not None
@@ -198,23 +186,11 @@ def _custom_monitoring_callback_train_mock(rank, world_size):
     # three times seconds per iter (current, averaged10, averaged100) + utilization per rank + max memory per rank
     assert len(logger.log_metrics.call_args[-1]["metrics"]) == 2 * world_size + 3
     assert "train/seconds_per_iter" in logger.log_metrics.call_args[-1]["metrics"]
-    assert (
-        "train/seconds_per_iter_averaged10"
-        in logger.log_metrics.call_args[-1]["metrics"]
-    )
-    assert (
-        "train/seconds_per_iter_averaged100"
-        in logger.log_metrics.call_args[-1]["metrics"]
-    )
+    assert "train/seconds_per_iter_averaged10" in logger.log_metrics.call_args[-1]["metrics"]
+    assert "train/seconds_per_iter_averaged100" in logger.log_metrics.call_args[-1]["metrics"]
     for i in range(world_size):
-        assert (
-            f"gpu_stats/utilization_rank{i}"
-            in logger.log_metrics.call_args[-1]["metrics"]
-        )
-        assert (
-            f"gpu_stats/max_memory_rank{i}"
-            in logger.log_metrics.call_args[-1]["metrics"]
-        )
+        assert f"gpu_stats/utilization_rank{i}" in logger.log_metrics.call_args[-1]["metrics"]
+        assert f"gpu_stats/max_memory_rank{i}" in logger.log_metrics.call_args[-1]["metrics"]
 
     for i in range(10):
         callback.on_train_batch_start(trainer, module, None, i + 3)
@@ -231,27 +207,12 @@ def _custom_monitoring_callback_train_mock(rank, world_size):
     # + utilization averaged10 per rank
     assert len(logger.log_metrics.call_args[-1]["metrics"]) == 3 * world_size + 3
     assert "train/seconds_per_iter" in logger.log_metrics.call_args[-1]["metrics"]
-    assert (
-        "train/seconds_per_iter_averaged10"
-        in logger.log_metrics.call_args[-1]["metrics"]
-    )
-    assert (
-        "train/seconds_per_iter_averaged100"
-        in logger.log_metrics.call_args[-1]["metrics"]
-    )
+    assert "train/seconds_per_iter_averaged10" in logger.log_metrics.call_args[-1]["metrics"]
+    assert "train/seconds_per_iter_averaged100" in logger.log_metrics.call_args[-1]["metrics"]
     for i in range(world_size):
-        assert (
-            f"gpu_stats/utilization_rank{i}"
-            in logger.log_metrics.call_args[-1]["metrics"]
-        )
-        assert (
-            f"gpu_stats/max_memory_rank{i}"
-            in logger.log_metrics.call_args[-1]["metrics"]
-        )
-        assert (
-            f"gpu_stats/utilization_rank{i}_averaged10"
-            in logger.log_metrics.call_args[-1]["metrics"]
-        )
+        assert f"gpu_stats/utilization_rank{i}" in logger.log_metrics.call_args[-1]["metrics"]
+        assert f"gpu_stats/max_memory_rank{i}" in logger.log_metrics.call_args[-1]["metrics"]
+        assert f"gpu_stats/utilization_rank{i}_averaged10" in logger.log_metrics.call_args[-1]["metrics"]
 
     for i in range(100):
         callback.on_train_batch_start(trainer, module, None, i + 13)
@@ -268,40 +229,20 @@ def _custom_monitoring_callback_train_mock(rank, world_size):
     # + utilization averaged10 per rank + utilization averaged100 per rank
     assert len(logger.log_metrics.call_args[-1]["metrics"]) == 4 * world_size + 3
     assert "train/seconds_per_iter" in logger.log_metrics.call_args[-1]["metrics"]
-    assert (
-        "train/seconds_per_iter_averaged10"
-        in logger.log_metrics.call_args[-1]["metrics"]
-    )
-    assert (
-        "train/seconds_per_iter_averaged100"
-        in logger.log_metrics.call_args[-1]["metrics"]
-    )
+    assert "train/seconds_per_iter_averaged10" in logger.log_metrics.call_args[-1]["metrics"]
+    assert "train/seconds_per_iter_averaged100" in logger.log_metrics.call_args[-1]["metrics"]
     for i in range(world_size):
-        assert (
-            f"gpu_stats/utilization_rank{i}"
-            in logger.log_metrics.call_args[-1]["metrics"]
-        )
-        assert (
-            f"gpu_stats/max_memory_rank{i}"
-            in logger.log_metrics.call_args[-1]["metrics"]
-        )
-        assert (
-            f"gpu_stats/utilization_rank{i}_averaged10"
-            in logger.log_metrics.call_args[-1]["metrics"]
-        )
-        assert (
-            f"gpu_stats/utilization_rank{i}_averaged100"
-            in logger.log_metrics.call_args[-1]["metrics"]
-        )
+        assert f"gpu_stats/utilization_rank{i}" in logger.log_metrics.call_args[-1]["metrics"]
+        assert f"gpu_stats/max_memory_rank{i}" in logger.log_metrics.call_args[-1]["metrics"]
+        assert f"gpu_stats/utilization_rank{i}_averaged10" in logger.log_metrics.call_args[-1]["metrics"]
+        assert f"gpu_stats/utilization_rank{i}_averaged100" in logger.log_metrics.call_args[-1]["metrics"]
 
     print("")
 
 
 @pytest.mark.parametrize("world_size", [1, 2, 4, 8])
 def test_custom_monitoring_callback_train(world_size):
-    torch.multiprocessing.spawn(
-        _custom_monitoring_callback_train_mock, args=(world_size,), nprocs=world_size
-    )
+    torch.multiprocessing.spawn(_custom_monitoring_callback_train_mock, args=(world_size,), nprocs=world_size)
 
 
 @pytest.mark.parametrize("world_size", [1, 2, 4, 42])
@@ -312,9 +253,7 @@ def test_custom_monitoring_checkpoint(world_size):
     cb._init_gpu_util_trackers(trainer.world_size)
     ckpt = {}
     cb.on_save_checkpoint(mock.MagicMock(), mock.MagicMock(), ckpt)
-    assert (
-        len(ckpt) == 4
-    )  # gpu_utilizations10, gpu_utilizations100, seconds_per_iter10, seconds_per_iter100
+    assert len(ckpt) == 4  # gpu_utilizations10, gpu_utilizations100, seconds_per_iter10, seconds_per_iter100
 
     assert len(ckpt["gpu_utilizations10"]) == world_size
     assert len(ckpt["gpu_utilizations100"]) == world_size
@@ -345,9 +284,7 @@ def test_custom_monitoring_checkpoint(world_size):
 
     ckpt2 = {}
     cb.on_save_checkpoint(trainer, mock.MagicMock(), ckpt2)
-    assert (
-        len(ckpt2) == 4
-    )  # gpu_utilizations10, gpu_utilizations100, seconds_per_iter10, seconds_per_iter100
+    assert len(ckpt2) == 4  # gpu_utilizations10, gpu_utilizations100, seconds_per_iter10, seconds_per_iter100
 
     assert len(ckpt2["gpu_utilizations10"]) == world_size
     assert len(ckpt2["gpu_utilizations100"]) == world_size
