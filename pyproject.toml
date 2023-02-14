@@ -9,10 +9,10 @@ authors = [
 ]
 description = "LAI components for training text prediction"
 readme = "README.md"
-url = "https://github.com/Lightning-Universe/Text-Prediction_component"
 requires-python = ">=3.8"
 keywords = ["deep learning", "machine learning", "pytorch", "AI"]
-license-files = "LICENSE"
+license = {text = "Apache-2.0"}
+repository = "https://github.com/Lightning-Universe/Text-Prediction_component"
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
