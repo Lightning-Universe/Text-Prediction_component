@@ -18,7 +18,7 @@ classifiers = [
 dependencies = [
     "numpy",
     "lightning>=1.8.4",
-    "deepspeed==0.9.5",
+    "deepspeed==0.10.0",
     "pynvml",
     "lightning-gpt==0.1.0",
     "tensorboardX",
