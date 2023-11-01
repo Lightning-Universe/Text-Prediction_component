@@ -1,20 +1,20 @@
 import time
 from typing import Any, Dict, List
 
-import lightning as L
 import torch
 import torchmetrics
-from lightning import pytorch as pl
+from lightning import Callback, Trainer, LightningModule
+from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 
 
 def default_callbacks():
-    early_stopping = L.pytorch.callbacks.EarlyStopping(
+    early_stopping = EarlyStopping(
         monitor="train_loss",
         min_delta=0.00,
         verbose=True,
         mode="min",
     )
-    checkpoints = L.pytorch.callbacks.ModelCheckpoint(
+    checkpoints = ModelCheckpoint(
         save_top_k=3,
         monitor="train_loss",
         mode="min",
@@ -53,7 +53,7 @@ class MovingAverage(torchmetrics.Metric):
         self.sliding_window_size = state.pop("sliding_window_size")
 
 
-class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
+class CustomMonitoringCallback(Callback):
     def __init__(self):
         super().__init__()
         self.last_batch_start_time = None
@@ -73,8 +73,8 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
 
     def on_train_batch_start(
         self,
-        trainer: "pl.Trainer",
-        pl_module: "pl.LightningModule",
+        trainer: "Trainer",
+        pl_module: "LightningModule",
         batch: Any,
         batch_idx: int,
     ) -> None:
@@ -145,8 +145,8 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
 
     def on_save_checkpoint(
         self,
-        trainer: "pl.Trainer",
-        pl_module: "pl.LightningModule",
+        trainer: "Trainer",
+        pl_module: "LightningModule",
         checkpoint: Dict[str, Any],
     ):
         for name_str in ("gpu_utilizations10", "gpu_utilizations100"):
@@ -157,8 +157,8 @@ class CustomMonitoringCallback(L.pytorch.callbacks.Callback):
 
     def on_load_checkpoint(
         self,
-        trainer: "pl.Trainer",
-        pl_module: "pl.LightningModule",
+        trainer: "Trainer",
+        pl_module: "LightningModule",
         checkpoint: Dict[str, Any],
     ):
         self._init_gpu_util_trackers(trainer.world_size)

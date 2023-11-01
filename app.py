@@ -2,15 +2,16 @@
 #! curl https://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt --create-dirs -o ${HOME}/data/shakespeare/input.txt -C -
 
 
-import lightning as L
 import os, torch
+
+from lightning.app import LightningWork
 from lightning_gpt import models
 from lit_llms.tensorboard import DriveTensorBoardLogger, MultiNodeLightningTrainerWithTensorboard
 
 from lai_textpred import WordDataset, default_callbacks, error_if_local, gpt_20b
 
 
-class WordPrediction(L.LightningWork):
+class WordPrediction(LightningWork):
     def __init__(self, *args, tb_drive, **kwargs):
         super().__init__(*args, **kwargs)
         self.tensorboard_drive = tb_drive
