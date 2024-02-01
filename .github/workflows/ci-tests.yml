@@ -35,7 +35,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: datasets cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: $HOME/.cache/torchtext
         key: ${{ runner.os }}-datasets
